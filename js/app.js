@@ -202,6 +202,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnCloseProjectModal.addEventListener('click', closeProjectModal);
   btnRefreshProjects.addEventListener('click', loadProjectsList);
 
+  const btnHudDownloadPhotos = document.getElementById('btn-hud-download-photos');
+  const btnBatchDownloadPhotosModal = document.getElementById('btn-batch-download-photos-modal');
+  const btnDownloadSinglePhoto = document.getElementById('btn-download-single-photo');
+
+  // Hook up HUD batch download button
+  if (btnHudDownloadPhotos) {
+    btnHudDownloadPhotos.addEventListener('click', () => {
+      if (currentProject) {
+        window.downloadProjectPhotos(currentProject.id, currentProject.name);
+      }
+    });
+  }
+
+  if (btnBatchDownloadPhotosModal) {
+    btnBatchDownloadPhotosModal.addEventListener('click', () => {
+      if (currentProject) {
+        window.downloadProjectPhotos(currentProject.id, currentProject.name);
+      }
+    });
+  }
+
   async function loadProjectsList() {
     projectsListContainer.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">프로젝트 목록을 조회하는 중...</div>';
     try {
@@ -222,6 +243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dateStr = new Date(p.created_at).toLocaleString();
         const distKm = (p.total_distance / 1000).toFixed(2);
         const isCompleted = p.status === 'COMPLETED';
+        const photoCount = Number(p.photo_count || 0);
 
         return `
           <div class="p-3.5 rounded-xl border ${isCurrent ? 'border-blue-500 bg-blue-50/40 ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:bg-slate-50'} transition flex flex-col gap-2">
@@ -233,7 +255,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
 
             <div class="flex items-center justify-between text-xs text-slate-500">
-              <span>${distKm} km • ${p.total_steps || 0}보 • 📸 ${p.photo_count || 0}</span>
+              <span>${distKm} km • ${p.total_steps || 0}보 • 📸 ${photoCount}장</span>
               <span class="text-[11px] text-slate-400">${dateStr}</span>
             </div>
 
@@ -241,6 +263,11 @@ document.addEventListener('DOMContentLoaded', async () => {
               <button class="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition" onclick="window.selectProjectById(${p.id})">
                 ${isCompleted ? '기록 불러오기' : '이어서 기록'}
               </button>
+              ${photoCount > 0 ? `
+              <button class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold transition flex items-center gap-1" onclick="window.downloadProjectPhotos(${p.id}, '${window.projectExporter.escapeHtml(p.name)}')" title="사진 일괄 다운로드">
+                📥 사진(${photoCount})
+              </button>
+              ` : ''}
               <button class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition" onclick="window.deleteProjectById(${p.id})">
                 삭제
               </button>
@@ -305,18 +332,115 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  // Delete Project
-  window.deleteProjectById = async (projectId) => {
-    if (!confirm('이 프로젝트 및 관련 GPS/사진 데이터를 완전히 삭제하시겠습니까?')) return;
+  // Single Photo Download (Feature 2)
+  if (btnDownloadSinglePhoto) {
+    btnDownloadSinglePhoto.addEventListener('click', () => {
+      if (!activePhotoForEdit) return;
+      const b64 = activePhotoForEdit.photoBase64 || activePhotoForEdit.photo_base64;
+      if (!b64) return;
+
+      const safeCaption = (activePhotoForEdit.caption || 'photo')
+        .replace(/[^a-zA-Z0-9가-힣_-]/g, '_')
+        .slice(0, 30);
+      const filename = `${safeCaption}_${Date.now()}.jpg`;
+
+      downloadBase64File(b64, filename);
+      showToast('📥 사진 파일이 다운로드되었습니다.');
+    });
+  }
+
+  // Batch Download All Photos as ZIP (Feature 3)
+  window.downloadProjectPhotos = async (projectId, projectName) => {
     try {
+      showToast('📦 사진 파일들을 압축(ZIP)하는 중...');
+      const fullData = await window.neonDB.getProjectDetails(projectId);
+      const photos = fullData.photos || [];
+
+      if (photos.length === 0) {
+        alert('이 프로젝트에 저장된 사진이 없습니다.');
+        return;
+      }
+
+      if (typeof JSZip === 'undefined') {
+        // Fallback: sequential download
+        for (let i = 0; i < photos.length; i++) {
+          const p = photos[i];
+          const b64 = p.photoBase64 || p.photo_base64;
+          const fname = `${projectName}_${i + 1}.jpg`;
+          downloadBase64File(b64, fname);
+        }
+        showToast(`📥 ${photos.length}장의 사진이 다운로드되었습니다.`);
+        return;
+      }
+
+      const zip = new JSZip();
+      const folderName = `${projectName || 'project'}_photos`.replace(/[^a-zA-Z0-9가-힣_-]/g, '_');
+      const imgFolder = zip.folder(folderName);
+
+      let captionSummary = `=== [${projectName}] 사진 캡션 및 메타데이터 목록 ===\n\n`;
+
+      photos.forEach((photo, idx) => {
+        const b64 = photo.photo_base64 || photo.photoBase64;
+        if (!b64) return;
+
+        // Strip data:image/jpeg;base64, header
+        const base64Data = b64.replace(/^data:image\/[a-z]+;base64,/, '');
+        const safeCaption = (photo.caption || 'photo')
+          .replace(/[^a-zA-Z0-9가-힣_-]/g, '_')
+          .slice(0, 25);
+        const fileName = `${String(idx + 1).padStart(2, '0')}_${safeCaption}.jpg`;
+
+        imgFolder.file(fileName, base64Data, { base64: true });
+
+        captionSummary += `[${idx + 1}] 파일명: ${fileName}\n`;
+        captionSummary += `    - 캡션/메모: ${photo.caption || '(메모 없음)'}\n`;
+        captionSummary += `    - 촬영시각: ${new Date(photo.created_at || photo.createdAt).toLocaleString()}\n`;
+        captionSummary += `    - 누적걸음: ${Number(photo.step_count || photo.stepCount || 0).toLocaleString()}보 | 누적거리: ${Number(photo.distance_at_photo || photo.distanceAtPhoto || 0).toLocaleString()}m\n`;
+        captionSummary += `    - 위치좌표: ${photo.latitude}, ${photo.longitude}\n\n`;
+      });
+
+      imgFolder.file('00_사진_메모_요약.txt', captionSummary);
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = zipUrl;
+      a.download = `${folderName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(zipUrl);
+
+      showToast(`🎉 모든 사진(${photos.length}장) 압축 다운로드 완료!`);
+    } catch (err) {
+      console.error('Batch photo download error:', err);
+      alert('사진 일괄 다운로드 실패: ' + err.message);
+    }
+  };
+
+  function downloadBase64File(base64Str, filename) {
+    const a = document.createElement('a');
+    a.href = base64Str;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Delete Project Completely from Neon DB & Local Storage (Feature 1)
+  window.deleteProjectById = async (projectId) => {
+    if (!confirm('이 프로젝트 및 관련 GPS 좌표, POI, 사진 데이터를 Neon DB에서 완전히 삭제하시겠습니까?\n(삭제 후 Neon DB 용량이 즉시 확보됩니다.)')) return;
+    try {
+      showToast('🗑️ Neon DB에서 영구 삭제 중...');
       await window.neonDB.deleteProject(projectId);
-      showToast('🗑️ 프로젝트가 삭제되었습니다.');
+      showToast('✅ 프로젝트 및 사진 데이터가 완전히 삭제되었습니다.');
       loadProjectsList();
       if (currentProject && currentProject.id === projectId) {
         currentProject = null;
         window.smartTracker.stopTracking();
         window.mapManager.clearAll();
         hudProjectTitle.textContent = '프로젝트를 선택하세요';
+        if (btnHudDownloadPhotos) btnHudDownloadPhotos.classList.add('hidden');
       }
     } catch (err) {
       alert('삭제 실패: ' + err.message);
@@ -327,6 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentProject = project;
     hudProjectTitle.textContent = project.name;
     window.mapManager.clearAll();
+    if (btnHudDownloadPhotos) btnHudDownloadPhotos.classList.add('hidden');
     
     // Start tracker
     window.smartTracker.startTracking();
@@ -337,6 +462,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   function restoreProjectSession(fullData) {
     currentProject = fullData.project;
     hudProjectTitle.textContent = currentProject.name;
+
+    // Show Batch download button in HUD if project has photos
+    const photoCount = fullData.photos ? fullData.photos.length : 0;
+    if (btnHudDownloadPhotos) {
+      if (photoCount > 0) {
+        btnHudDownloadPhotos.classList.remove('hidden');
+        btnHudDownloadPhotos.title = `사진 전체 다운로드 (${photoCount}장)`;
+      } else {
+        btnHudDownloadPhotos.classList.add('hidden');
+      }
+    }
 
     // Restore map polylines, POIs, Photos
     window.mapManager.restoreProjectTrail(

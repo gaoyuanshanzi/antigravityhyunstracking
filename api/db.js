@@ -197,11 +197,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data: rows[0] });
     }
 
-    // 11. Delete Project
+    // 11. Delete Project (Complete Purge of all associated photos, points, pois)
     if (action === 'delete_project') {
       const { projectId } = payload;
+      // Explicitly delete children first to guarantee zero dangling data
+      await sql`DELETE FROM photos WHERE project_id = ${projectId};`;
+      await sql`DELETE FROM pois WHERE project_id = ${projectId};`;
+      await sql`DELETE FROM tracking_points WHERE project_id = ${projectId};`;
       await sql`DELETE FROM projects WHERE id = ${projectId};`;
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, message: 'Project completely deleted from Neon DB' });
     }
 
     return res.status(400).json({ success: false, error: 'Unknown action' });
