@@ -1,0 +1,12 @@
+{
+  "name": "antigravity-smart-tracker",
+  "version": "1.0.0",
+  "description": "Mobile Smart GPS & Step Tracker PWA with Neon PostgreSQL",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve ."
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

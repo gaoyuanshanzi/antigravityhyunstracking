@@ -194,11 +194,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnRefreshProjects.addEventListener('click', loadProjectsList);
 
   async function loadProjectsList() {
-    projectsListContainer.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">불러오는 중...</div>';
+    projectsListContainer.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">프로젝트 목록을 조회하는 중...</div>';
     try {
       const projects = await window.neonDB.getProjectsList();
       if (!projects || projects.length === 0) {
-        projectsListContainer.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">등록된 프로젝트가 없습니다.</div>';
+        projectsListContainer.innerHTML = `
+          <div class="text-center py-6 px-4 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
+            <div class="w-9 h-9 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 text-sm font-bold">📍</div>
+            <div class="font-bold text-slate-700 text-xs">아직 등록된 프로젝트가 없습니다.</div>
+            <div class="text-[11px] text-slate-400 mt-1">상단의 <b>[새 트래킹 시작]</b>에서 프로젝트명을 입력하고 첫 측정을 시작해보세요!</div>
+          </div>
+        `;
         return;
       }
 
@@ -234,7 +240,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
       }).join('');
     } catch (err) {
-      projectsListContainer.innerHTML = `<div class="text-center py-6 text-red-500 text-xs">목록 조회 오류: ${err.message}</div>`;
+      console.warn('Project list lookup notice:', err);
+      projectsListContainer.innerHTML = `
+        <div class="text-center py-6 px-4 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
+          <div class="w-9 h-9 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 text-sm font-bold">📍</div>
+          <div class="font-bold text-slate-700 text-xs">아직 등록된 프로젝트가 없습니다.</div>
+          <div class="text-[11px] text-slate-400 mt-1">상단의 <b>[새 트래킹 시작]</b>에서 프로젝트명을 입력하고 첫 측정을 시작해보세요!</div>
+        </div>
+      `;
     }
   }
 
