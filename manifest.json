@@ -1,0 +1,17 @@
+{
+  "name": "Smart GPS & Step Tracker",
+  "short_name": "SmartTracker",
+  "description": "Mobile-optimized location and step tracking PWA with Neon PostgreSQL integration",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%232563eb'/><path d='M50 20 L50 80 M20 50 L80 50' stroke='%23ffffff' stroke-width='8' stroke-linecap='round'/><circle cx='50' cy='50' r='14' fill='%23ffffff'/></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

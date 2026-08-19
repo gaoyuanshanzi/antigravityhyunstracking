@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SmartTracker">
+  <meta name="theme-color" content="#2563eb">
+  <title>위치 기반 스마트 트래킹 PWA (Neon DB)</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%232563eb'/><circle cx='50' cy='50' r='14' fill='%23ffffff'/></svg>">
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-900 select-none">
+
+  <!-- App Wrapper -->
+  <div id="app-container">
+    
+    <!-- 1. Leaflet Interactive Map -->
+    <div id="map"></div>
+
+    <!-- 2. Top Floating HUD (Head-Up Display) -->
+    <header class="top-hud-bar">
+      <div class="top-hud-content">
+        
+        <!-- Top Status & Project Name Row -->
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+          <div class="flex items-center gap-2 overflow-hidden">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h1 id="hud-project-title" class="font-extrabold text-sm text-slate-800 truncate">
+              프로젝트를 선택하세요
+            </h1>
+          </div>
+          
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <!-- Sync Status Badge -->
+            <div id="sync-badge" class="sync-badge synced">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span id="sync-badge-text">DB 연결됨</span>
+            </div>
+            
+            <!-- Admin Logout & Menu Button -->
+            <button id="btn-project-menu" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="프로젝트 메뉴">
+              <i data-lucide="folder" class="w-4 h-4"></i>
+            </button>
+            <button id="btn-logout" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-red-600 transition" title="로그아웃">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Primary 3-Metric Grid: Distance, Steps, Avg Stride -->
+        <div class="hud-metrics-grid">
+          <!-- Distance -->
+          <div class="hud-metric-item">
+            <span class="hud-metric-label">총 이동거리</span>
+            <div class="hud-metric-value text-blue-600">
+              <span id="hud-distance">0.00</span>
+              <span class="hud-metric-unit">km</span>
+            </div>
+          </div>
+
+          <!-- Step Count -->
+          <div class="hud-metric-item border-x border-slate-100">
+            <span class="hud-metric-label">걸음 수</span>
+            <div class="hud-metric-value text-emerald-600">
+              <span id="hud-steps">0</span>
+              <span class="hud-metric-unit">보</span>
+            </div>
+          </div>
+
+          <!-- Avg Stride (cm) = (Distance / Steps) * 100 -->
+          <div class="hud-metric-item">
+            <span class="hud-metric-label">평균 보폭</span>
+            <div class="hud-metric-value text-amber-600">
+              <span id="hud-stride">0.0</span>
+              <span class="hud-metric-unit">cm</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secondary Info Row: Elapsed Time, Speed, Altitude, WakeLock -->
+        <div class="hud-sub-row">
+          <div class="flex items-center gap-1">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span id="hud-duration" class="font-mono font-bold text-slate-700">00:00:00</span>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <i data-lucide="gauge" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>속도: <b id="hud-speed" class="text-slate-700">0.0</b> km/h</span>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <i data-lucide="mountain" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>고도: <b id="hud-altitude" class="text-slate-700">--</b> m</span>
+          </div>
+
+          <div id="wakelock-badge" class="flex items-center gap-1 text-[11px] text-emerald-600 font-bold" title="화면 꺼짐 방지 활성화됨">
+            <i data-lucide="sun" class="w-3 h-3 text-amber-500"></i>
+            <span>화면 유지</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 3. Segment & POI Quick Stats Panel -->
+    <div id="segment-stats-panel" class="segment-stats-card hidden">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-500">📍</span>
+          <span id="segment-poi-name" class="font-bold text-xs text-slate-800 truncate max-w-[170px]">지점 기준 통계</span>
+        </div>
+        <button id="btn-close-segment" class="text-slate-400 hover:text-slate-600 text-xs font-bold px-1">✕</button>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mt-1.5 text-center text-xs">
+        <div class="bg-amber-50/60 p-1.5 rounded-lg">
+          <div class="text-[10px] text-amber-600 font-semibold">구간 거리</div>
+          <div class="font-bold text-slate-800"><span id="segment-distance">0.00</span> km</div>
+        </div>
+        <div class="bg-amber-50/60 p-1.5 rounded-lg">
+          <div class="text-[10px] text-amber-600 font-semibold">구간 걸음</div>
+          <div class="font-bold text-slate-800"><span id="segment-steps">0</span> 보</div>
+        </div>
+        <div class="bg-amber-50/60 p-1.5 rounded-lg">
+          <div class="text-[10px] text-amber-600 font-semibold">구간 보폭</div>
+          <div class="font-bold text-slate-800"><span id="segment-stride">0.0</span> cm</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Floating Action Controls (Right side) -->
+    <div class="map-floating-controls">
+      <!-- Recenter Map Button -->
+      <button id="btn-recenter" class="map-circle-btn text-blue-600 hidden" title="현재 위치로 이동">
+        <i data-lucide="crosshair" class="w-5 h-5"></i>
+      </button>
+      <!-- Manual Step Trigger (Sensor calibration / Fallback) -->
+      <button id="btn-manual-step" class="map-circle-btn text-emerald-600" title="수동 걸음 1보 추가">
+        <i data-lucide="footprints" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- 5. Bottom Action Dock (Main Touchpad) -->
+    <nav class="bottom-dock-container">
+      <div class="bottom-dock-card">
+        <div class="action-buttons-row">
+          
+          <!-- Button 1: Add POI Pin -->
+          <button id="btn-action-poi" class="action-dock-btn btn-poi-action">
+            <i data-lucide="map-pin" class="w-5 h-5"></i>
+            <span>지점 핀</span>
+          </button>
+
+          <!-- Button 2: Take Photo -->
+          <button id="btn-action-photo" class="action-dock-btn btn-photo-action">
+            <i data-lucide="camera" class="w-5 h-5"></i>
+            <span>사진 촬영</span>
+          </button>
+          <input type="file" id="camera-file-input" accept="image/*" capture="environment" class="hidden" />
+
+          <!-- Button 3: Pause / Resume -->
+          <button id="btn-action-pause" class="action-dock-btn bg-slate-100 text-slate-700">
+            <i id="pause-icon" data-lucide="pause" class="w-5 h-5"></i>
+            <span id="pause-text">일시정지</span>
+          </button>
+
+          <!-- Button 4: Finish & Export HTML -->
+          <button id="btn-action-finish" class="action-dock-btn btn-finish-action">
+            <i data-lucide="download" class="w-5 h-5"></i>
+            <span>기록 종료</span>
+          </button>
+
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hidden Native File Input for Photo Capture -->
+    <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
+
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- MODAL 1: Admin Login Screen (Mandatory) -->
+  <div id="modal-login" class="modal-overlay active">
+    <div class="modal-card">
+      <div class="p-6 text-center bg-gradient-to-b from-blue-50 to-white">
+        <div class="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/30">
+          <i data-lucide="map-pin" class="w-8 h-8"></i>
+        </div>
+        <h2 class="text-xl font-black text-slate-900">스마트 트래킹 시스템</h2>
+        <p class="text-xs text-slate-500 mt-1">관리자 인증 후 서비스에 접속할 수 있습니다.</p>
+      </div>
+      
+      <form id="form-login" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">관리자 아이디 (ID)</label>
+          <input type="text" id="login-id" placeholder="관리자 ID 입력" required autocomplete="username"
+                 class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">비밀번호 (Password)</label>
+          <input type="password" id="login-password" placeholder="비밀번호 입력" required autocomplete="current-password"
+                 class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
+        </div>
+
+        <div id="login-error" class="text-xs font-semibold text-red-600 hidden text-center">
+          아이디 또는 비밀번호가 올바르지 않습니다.
+        </div>
+
+        <button type="submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold rounded-xl shadow-lg shadow-blue-500/25 transition">
+          관리자 로그인 및 시작
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Project Selection & Management Modal -->
+  <div id="modal-project" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="font-extrabold text-base text-slate-900">트래킹 프로젝트 관리</h3>
+          <p class="text-xs text-slate-500">새 프로젝트를 생성하거나 이전 기록을 조회합니다.</p>
+        </div>
+        <button id="btn-close-project-modal" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+      </div>
+
+      <div class="modal-body space-y-4">
+        <!-- New Project Quick Form -->
+        <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-100">
+          <h4 class="font-bold text-sm text-blue-900 mb-2 flex items-center gap-1.5">
+            <i data-lucide="plus-circle" class="w-4 h-4 text-blue-600"></i> 새 트래킹 시작
+          </h4>
+          <div class="flex gap-2">
+            <input type="text" id="input-new-project-name" placeholder="프로젝트 명 (예: 한강 도보 실측 1코스)"
+                   class="flex-1 px-3 py-2 bg-white border border-blue-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button id="btn-create-project" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition flex-shrink-0">
+              시작
+            </button>
+          </div>
+        </div>
+
+        <!-- Project History List -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-sm text-slate-800">이전 프로젝트 목록 (Neon DB)</h4>
+            <button id="btn-refresh-projects" class="text-xs text-blue-600 font-semibold flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+            </button>
+          </div>
+
+          <div id="projects-list-container" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+            <div class="text-center py-6 text-slate-400 text-xs">불러오는 중...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: Photo Caption Modal -->
+  <div id="modal-photo-caption" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="font-extrabold text-base text-slate-900">사진 캡션 및 메모 입력</h3>
+        <button id="btn-close-caption-modal" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+      </div>
+
+      <div class="modal-body space-y-3">
+        <div class="w-full aspect-video rounded-xl bg-slate-950 overflow-hidden flex items-center justify-center">
+          <img id="preview-captured-photo" class="max-h-full max-w-full object-contain" alt="촬영 사진" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">현장 메모 / 캡션</label>
+          <textarea id="input-photo-caption" rows="3" placeholder="촬영 위치에 대한 메모나 특이사항을 적어주세요."
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none"></textarea>
+        </div>
+
+        <div class="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg space-y-0.5">
+          <div>📍 <b>위치 좌표:</b> <span id="caption-meta-coords">--</span></div>
+          <div>👣 <b>촬영 시점 걸음수:</b> <span id="caption-meta-steps">--</span> 보</div>
+          <div>📏 <b>누적 거리:</b> <span id="caption-meta-distance">--</span> m</div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-cancel-photo" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+          취소
+        </button>
+        <button id="btn-save-photo" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow transition">
+          저장 & 지도에 등록
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: POI Name Input Modal -->
+  <div id="modal-poi-input" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="font-extrabold text-base text-slate-900">특정 지점(POI) 핀 등록</h3>
+        <button id="btn-close-poi-modal" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+      </div>
+
+      <div class="modal-body space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">지점 명칭</label>
+          <input type="text" id="input-poi-name" placeholder="예: 쉼터 1, 횡단보도, 경사로 시작점"
+                 class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white" />
+        </div>
+        <p class="text-xs text-slate-500">
+          현재 위치에 마커를 생성하며, 이후 이 지점부터의 구간 거리와 보폭 통계를 모니터링할 수 있습니다.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-cancel-poi" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+          취소
+        </button>
+        <button id="btn-save-poi" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm shadow transition">
+          지점 등록
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: Photo Lightbox Detail View Modal -->
+  <div id="modal-photo-detail" class="modal-overlay">
+    <div class="modal-card max-w-xl">
+      <div class="modal-header">
+        <h3 class="font-extrabold text-base text-slate-900">촬영 기록 상세</h3>
+        <button id="btn-close-photo-detail" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+      </div>
+
+      <div class="p-3 bg-slate-950 flex items-center justify-center max-h-[50vh]">
+        <img id="detail-photo-img" src="" class="max-h-[48vh] max-w-full object-contain rounded-lg" alt="photo" />
+      </div>
+
+      <div class="modal-body space-y-3">
+        <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+          <div class="text-xs font-bold text-blue-600 mb-1">메모 / 캡션</div>
+          <p id="detail-photo-caption" class="text-sm font-semibold text-slate-800"></p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-50 p-2 rounded-lg">
+            <span class="text-slate-400">촬영 시각</span>
+            <div id="detail-photo-time" class="font-bold text-slate-700 mt-0.5">--</div>
+          </div>
+          <div class="bg-slate-50 p-2 rounded-lg">
+            <span class="text-slate-400">누적 걸음 수</span>
+            <div id="detail-photo-steps" class="font-bold text-slate-700 mt-0.5">--</div>
+          </div>
+          <div class="bg-slate-50 p-2 rounded-lg">
+            <span class="text-slate-400">누적 이동 거리</span>
+            <div id="detail-photo-distance" class="font-bold text-slate-700 mt-0.5">--</div>
+          </div>
+          <div class="bg-slate-50 p-2 rounded-lg">
+            <span class="text-slate-400">위치 좌표</span>
+            <div id="detail-photo-coords" class="font-bold text-slate-700 mt-0.5">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: Finish Project & Export Confirmation -->
+  <div id="modal-finish-confirm" class="modal-overlay">
+    <div class="modal-card">
+      <div class="p-6 text-center">
+        <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="check-circle-2" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-lg font-black text-slate-900">트래킹 기록 종료 및 HTML 내보내기</h3>
+        <p class="text-xs text-slate-500 mt-2">
+          프로젝트를 'COMPLETED' 상태로 변경하고, 외부 서버 없이 즉시 열람 가능한 <b>독립 실행형 단일 HTML 파일</b>을 다운로드합니다.
+        </p>
+
+        <div class="bg-slate-50 p-4 rounded-xl mt-4 text-left text-xs space-y-1.5 border border-slate-200">
+          <div class="flex justify-between">
+            <span class="text-slate-500">프로젝트명:</span>
+            <span id="finish-summary-title" class="font-bold text-slate-800">--</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">총 이동 거리:</span>
+            <span id="finish-summary-dist" class="font-bold text-blue-600">--</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">총 걸음 수 / 보폭:</span>
+            <span id="finish-summary-steps" class="font-bold text-emerald-600">--</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">총 소요 시간:</span>
+            <span id="finish-summary-duration" class="font-bold text-purple-600">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-cancel-finish" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+          계속 기록하기
+        </button>
+        <button id="btn-confirm-finish-export" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow transition">
+          종료 & HTML 다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Application Logic Scripts -->
+  <script src="./js/db.js"></script>
+  <script src="./js/tracker.js"></script>
+  <script src="./js/map.js"></script>
+  <script src="./js/exporter.js"></script>
+  <script src="./js/app.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW failed:', e));
+      });
+    }
+  </script>
+</body>
+</html>
