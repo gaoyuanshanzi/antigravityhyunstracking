@@ -32,7 +32,9 @@ export default async function handler(req, res) {
           total_distance FLOAT DEFAULT 0,
           total_steps INT DEFAULT 0,
           avg_stride FLOAT DEFAULT 0,
-          duration_sec INT DEFAULT 0
+          duration_sec INT DEFAULT 0,
+          address TEXT,
+          weather TEXT
         );
       `;
       await sql`
@@ -131,26 +133,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data: rows[0] });
     }
 
-    // 6. Insert Batch Points (efficient mobile batching)
-    if (action === 'insert_batch_points') {
-      const { projectId, points } = payload;
-      if (points && points.length > 0) {
-        for (const pt of points) {
-          await sql`
-            INSERT INTO tracking_points (project_id, latitude, longitude, altitude, step_count, speed, recorded_at)
-            VALUES (${projectId}, ${pt.latitude}, ${pt.longitude}, ${pt.altitude || 0}, ${pt.stepCount || 0}, ${pt.speed || 0}, ${pt.recorded_at || 'NOW()'});
-          `;
-        }
-      }
-      return res.status(200).json({ success: true });
-    }
-
-    // 7. Insert POI
+    // 6. Insert POI
     if (action === 'insert_poi') {
       const { projectId, name, latitude, longitude, altitude } = payload;
       const rows = await sql`
         INSERT INTO pois (project_id, name, latitude, longitude, altitude, created_at)
         VALUES (${projectId}, ${name}, ${latitude}, ${longitude}, ${altitude || 0}, NOW())
+        RETURNING *;
+      `;
+      return res.status(200).json({ success: true, data: rows[0] });
+    }
+
+    // 7. Update POI Name
+    if (action === 'update_poi') {
+      const { poiId, name } = payload;
+      const rows = await sql`
+        UPDATE pois 
+        SET name = ${name}
+        WHERE id = ${poiId}
         RETURNING *;
       `;
       return res.status(200).json({ success: true, data: rows[0] });
@@ -167,30 +167,41 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, data: rows[0] });
     }
 
-    // 9. Update Project Stats
+    // 9. Update Photo Caption
+    if (action === 'update_photo_caption') {
+      const { photoId, caption } = payload;
+      const rows = await sql`
+        UPDATE photos 
+        SET caption = ${caption}
+        WHERE id = ${photoId}
+        RETURNING *;
+      `;
+      return res.status(200).json({ success: true, data: rows[0] });
+    }
+
+    // 10. Update Project Stats & Info
     if (action === 'update_project') {
-      const { projectId, totalDistance, totalSteps, avgStride, durationSec, status } = payload;
+      const { projectId, totalDistance, totalSteps, avgStride, durationSec, status, address, weather } = payload;
       const rows = await sql`
         UPDATE projects 
-        SET total_distance = ${totalDistance}, total_steps = ${totalSteps}, avg_stride = ${avgStride}, duration_sec = ${durationSec}, status = ${status || 'IN_PROGRESS'}
+        SET total_distance = ${totalDistance}, 
+            total_steps = ${totalSteps}, 
+            avg_stride = ${avgStride}, 
+            duration_sec = ${durationSec}, 
+            status = ${status || 'IN_PROGRESS'},
+            address = COALESCE(${address || null}, address),
+            weather = COALESCE(${weather || null}, weather)
         WHERE id = ${projectId}
         RETURNING *;
       `;
       return res.status(200).json({ success: true, data: rows[0] });
     }
 
-    // 10. Delete Project
+    // 11. Delete Project
     if (action === 'delete_project') {
       const { projectId } = payload;
       await sql`DELETE FROM projects WHERE id = ${projectId};`;
       return res.status(200).json({ success: true });
-    }
-
-    // Raw SQL fallback
-    if (action === 'raw_query') {
-      const { query, params } = payload;
-      const rows = await sql(query, params || []);
-      return res.status(200).json({ success: true, data: rows });
     }
 
     return res.status(400).json({ success: false, error: 'Unknown action' });

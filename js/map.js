@@ -1,5 +1,5 @@
 /**
- * Leaflet Map Controller for Mobile White-Mode Tracking
+ * Leaflet Map Controller with Permanent Visible Labels for POI & Photo Captions
  */
 
 class MapManager {
@@ -15,9 +15,7 @@ class MapManager {
     this.photoLayerGroup = null;
     this.trailCoordinates = [];
     
-    this.isUserPanning = false;
     this.autoFollow = true;
-
     this.onPhotoClickCallback = null;
     this.onPOIClickCallback = null;
   }
@@ -61,7 +59,6 @@ class MapManager {
       if (followBtn) followBtn.classList.remove('hidden');
     });
 
-    // Invalidate map size when window resizes or orientation changes
     window.addEventListener('resize', () => {
       if (this.map) this.map.invalidateSize();
     });
@@ -101,9 +98,9 @@ class MapManager {
       if (!this.startMarker) {
         const startIcon = L.divIcon({
           className: 'start-flag-marker',
-          html: `<div class="start-badge">출발</div>`,
-          iconSize: [44, 24],
-          iconAnchor: [22, 24]
+          html: `<div class="start-badge">🚩 출발</div>`,
+          iconSize: [60, 26],
+          iconAnchor: [30, 26]
         });
         this.startMarker = L.marker(latlng, { icon: startIcon }).addTo(this.map);
       }
@@ -136,32 +133,41 @@ class MapManager {
     }
   }
 
+  // --- Add POI Marker with Permanent Visible Label & Edit Action ---
   addPOIMarker(poi, onClick) {
     if (!this.map) return;
 
+    const safeName = this.escapeHtml(poi.name || '지점');
     const poiIcon = L.divIcon({
-      className: 'poi-map-marker',
+      className: 'poi-map-marker-container',
       html: `
-        <div class="poi-pin">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        <div class="poi-marker-wrap">
+          <div class="poi-pin-icon">📍</div>
+          <div class="poi-title-bubble">${safeName}</div>
         </div>
-        <div class="poi-label">${poi.name}</div>
       `,
-      iconSize: [120, 36],
-      iconAnchor: [60, 36]
+      iconSize: [140, 50],
+      iconAnchor: [70, 48]
     });
 
-    const marker = L.marker([poi.latitude, poi.longitude], { icon: poiIcon });
+    const marker = L.marker([poi.latitude, poi.longitude], { icon: poiIcon, zIndexOffset: 400 });
+    marker.poiData = poi;
     
-    marker.on('click', () => {
+    marker.on('click', (e) => {
       if (onClick) onClick(poi);
     });
 
+    const timeStr = poi.created_at || poi.createdAt ? new Date(poi.created_at || poi.createdAt).toLocaleTimeString() : '';
     marker.bindPopup(`
-      <div class="p-2 text-slate-800">
-        <h4 class="font-bold text-sm text-blue-600 mb-1">📍 ${poi.name}</h4>
-        <p class="text-xs text-slate-500 mb-2">${new Date(poi.createdAt || poi.created_at).toLocaleTimeString()}</p>
-        <button class="w-full py-1 px-2 bg-blue-50 text-blue-600 font-semibold rounded text-xs border border-blue-200" onclick="window.selectPOIFromMap(${poi.id})">
+      <div class="p-2 text-slate-800 min-w-[180px]">
+        <div class="flex items-center justify-between mb-1">
+          <h4 class="font-extrabold text-sm text-amber-600">📍 ${safeName}</h4>
+          <button onclick="window.promptEditPOI(${poi.id})" class="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+            수정
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400 mb-2">${timeStr}</p>
+        <button class="w-full py-1.5 px-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs shadow-sm transition" onclick="window.selectPOIFromMap(${poi.id})">
           이 지점부터 구간 통계 보기
         </button>
       </div>
@@ -171,22 +177,28 @@ class MapManager {
     return marker;
   }
 
+  // --- Add Photo Marker with Permanent Visible Caption Bubble ---
   addPhotoMarker(photo, onClick) {
     if (!this.map) return;
 
+    const safeCaption = photo.caption ? this.escapeHtml(photo.caption) : '사진';
     const photoIcon = L.divIcon({
-      className: 'photo-map-marker',
+      className: 'photo-map-marker-container',
       html: `
-        <div class="photo-pin-bubble">
-          <img src="${photo.photoBase64 || photo.photo_base64}" class="photo-pin-thumb" alt="thumb" />
-          <span class="photo-camera-icon">📷</span>
+        <div class="photo-marker-wrap">
+          <div class="photo-pin-bubble">
+            <img src="${photo.photoBase64 || photo.photo_base64}" class="photo-pin-thumb" alt="thumb" />
+            <span class="photo-camera-icon">📷</span>
+          </div>
+          <div class="photo-caption-bubble">${safeCaption}</div>
         </div>
       `,
-      iconSize: [44, 44],
-      iconAnchor: [22, 44]
+      iconSize: [140, 70],
+      iconAnchor: [70, 44]
     });
 
     const marker = L.marker([photo.latitude, photo.longitude], { icon: photoIcon, zIndexOffset: 500 });
+    marker.photoData = photo;
     
     marker.on('click', () => {
       if (onClick) onClick(photo);
@@ -210,28 +222,30 @@ class MapManager {
     const firstPt = points[0];
     const startIcon = L.divIcon({
       className: 'start-flag-marker',
-      html: `<div class="start-badge">출발</div>`,
-      iconSize: [44, 24],
-      iconAnchor: [22, 24]
+      html: `<div class="start-badge">🚩 출발</div>`,
+      iconSize: [60, 26],
+      iconAnchor: [30, 26]
     });
     this.startMarker = L.marker([firstPt.latitude, firstPt.longitude], { icon: startIcon }).addTo(this.map);
 
     // End Marker
-    const lastPt = points[points.length - 1];
-    const endIcon = L.divIcon({
-      className: 'end-flag-marker',
-      html: `<div class="end-badge">도착</div>`,
-      iconSize: [44, 24],
-      iconAnchor: [22, 24]
-    });
-    L.marker([lastPt.latitude, lastPt.longitude], { icon: endIcon }).addTo(this.map);
+    if (points.length > 1) {
+      const lastPt = points[points.length - 1];
+      const endIcon = L.divIcon({
+        className: 'end-flag-marker',
+        html: `<div class="end-badge">🏁 도착</div>`,
+        iconSize: [60, 26],
+        iconAnchor: [30, 26]
+      });
+      L.marker([lastPt.latitude, lastPt.longitude], { icon: endIcon }).addTo(this.map);
+    }
 
-    // Restore POIs
+    // Restore POIs with visible labels
     if (pois && pois.length > 0) {
       pois.forEach(poi => this.addPOIMarker(poi, onPOIClick));
     }
 
-    // Restore Photos
+    // Restore Photos with visible captions
     if (photos && photos.length > 0) {
       photos.forEach(photo => this.addPhotoMarker(photo, onPhotoClick));
     }
@@ -258,6 +272,11 @@ class MapManager {
       this.map.removeLayer(this.startMarker);
       this.startMarker = null;
     }
+  }
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 }
 

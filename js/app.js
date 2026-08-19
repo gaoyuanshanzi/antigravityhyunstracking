@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const hudDistance = document.getElementById('hud-distance');
   const hudSteps = document.getElementById('hud-steps');
   const hudStride = document.getElementById('hud-stride');
+  const hudAvgSpeed = document.getElementById('hud-avg-speed');
   const hudDuration = document.getElementById('hud-duration');
   const hudSpeed = document.getElementById('hud-speed');
   const hudAltitude = document.getElementById('hud-altitude');
@@ -60,14 +61,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pauseText = document.getElementById('pause-text');
   const btnActionFinish = document.getElementById('btn-action-finish');
 
-  // Modals: POI
+  // Modals: POI & Edit POI
   const modalPoiInput = document.getElementById('modal-poi-input');
   const inputPoiName = document.getElementById('input-poi-name');
   const btnClosePoiModal = document.getElementById('btn-close-poi-modal');
   const btnCancelPoi = document.getElementById('btn-cancel-poi');
   const btnSavePoi = document.getElementById('btn-save-poi');
 
-  // Modals: Photo Caption
+  const modalEditPoi = document.getElementById('modal-edit-poi');
+  const editPoiId = document.getElementById('edit-poi-id');
+  const editPoiNameInput = document.getElementById('edit-poi-name-input');
+  const btnCloseEditPoi = document.getElementById('btn-close-edit-poi');
+  const btnCancelEditPoi = document.getElementById('btn-cancel-edit-poi');
+  const btnSaveEditPoi = document.getElementById('btn-save-edit-poi');
+
+  // Modals: Photo Caption & Detail
   const modalPhotoCaption = document.getElementById('modal-photo-caption');
   const previewCapturedPhoto = document.getElementById('preview-captured-photo');
   const inputPhotoCaption = document.getElementById('input-photo-caption');
@@ -78,10 +86,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCancelPhoto = document.getElementById('btn-cancel-photo');
   const btnSavePhoto = document.getElementById('btn-save-photo');
 
-  // Modals: Photo Lightbox
   const modalPhotoDetail = document.getElementById('modal-photo-detail');
+  const detailPhotoId = document.getElementById('detail-photo-id');
   const detailPhotoImg = document.getElementById('detail-photo-img');
-  const detailPhotoCaption = document.getElementById('detail-photo-caption');
+  const detailPhotoCaptionInput = document.getElementById('detail-photo-caption-input');
+  const btnSavePhotoCaption = document.getElementById('btn-save-photo-caption');
   const detailPhotoTime = document.getElementById('detail-photo-time');
   const detailPhotoSteps = document.getElementById('detail-photo-steps');
   const detailPhotoDistance = document.getElementById('detail-photo-distance');
@@ -341,10 +350,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.smartTracker.stopTracking();
       if (syncInterval) clearInterval(syncInterval);
 
-      hudDistance.textContent = (currentProject.total_distance / 1000).toFixed(2);
-      hudSteps.textContent = currentProject.total_steps.toLocaleString();
+      const dist = currentProject.total_distance || 0;
+      const dur = currentProject.duration_sec || 0;
+      const avgSpd = dur > 0 ? ((dist / dur) * 3.6).toFixed(1) : '0.0';
+
+      hudDistance.textContent = (dist / 1000).toFixed(2);
+      hudSteps.textContent = Number(currentProject.total_steps || 0).toLocaleString();
       hudStride.textContent = currentProject.avg_stride ? Number(currentProject.avg_stride).toFixed(1) : '0.0';
-      hudDuration.textContent = window.projectExporter.formatSeconds(currentProject.duration_sec || 0);
+      if (hudAvgSpeed) hudAvgSpeed.textContent = avgSpd;
+      hudDuration.textContent = window.projectExporter.formatSeconds(dur);
       showToast('📖 완료된 프로젝트 기록을 불러왔습니다.');
     } else {
       // Resume live tracking
@@ -403,6 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     hudDistance.textContent = stats.totalDistanceKm;
     hudSteps.textContent = stats.totalSteps.toLocaleString();
     hudStride.textContent = stats.avgStrideFormatted;
+    if (hudAvgSpeed) hudAvgSpeed.textContent = stats.avgSpeed;
     hudDuration.textContent = stats.durationFormatted;
     hudSpeed.textContent = stats.currentSpeed;
     hudAltitude.textContent = stats.currentAltitude !== 0 ? stats.currentAltitude : '--';
@@ -428,7 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     showToast('👣 1보 추가됨');
   });
 
-  // --- 6. POI Feature ---
+  // --- 6. POI Feature (Add & Edit) ---
   btnActionPoi.addEventListener('click', () => {
     if (!currentProject) {
       showToast('⚠️ 먼저 프로젝트를 시작하거나 선택해주세요.');
@@ -468,6 +483,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectPOIForSegment(poi);
   });
 
+  // Edit Existing POI Name (Feature 1)
+  window.promptEditPOI = (poiId) => {
+    const poi = window.smartTracker.pois.find(p => p.id === poiId) || 
+                (window.mapManager.poiLayerGroup ? Array.from(window.mapManager.poiLayerGroup.getLayers()).map(l => l.poiData).find(p => p && p.id === poiId) : null);
+    if (!poi) return;
+    editPoiId.value = poiId;
+    editPoiNameInput.value = poi.name || '';
+    modalEditPoi.classList.add('active');
+  };
+
+  function closeEditPoiModal() {
+    modalEditPoi.classList.remove('active');
+  }
+
+  btnCloseEditPoi.addEventListener('click', closeEditPoiModal);
+  btnCancelEditPoi.addEventListener('click', closeEditPoiModal);
+
+  btnSaveEditPoi.addEventListener('click', async () => {
+    const newName = editPoiNameInput.value.trim();
+    const poiId = Number(editPoiId.value);
+    if (!newName) return;
+
+    closeEditPoiModal();
+    
+    // Update in local tracker
+    const targetPOI = window.smartTracker.pois.find(p => p.id === poiId);
+    if (targetPOI) targetPOI.name = newName;
+
+    // Update in Neon DB
+    await window.neonDB.updatePOI(poiId, newName);
+
+    // Refresh map markers
+    if (currentProject) {
+      const fullData = await window.neonDB.getProjectDetails(currentProject.id);
+      window.mapManager.restoreProjectTrail(
+        fullData,
+        (photo) => openPhotoDetail(photo),
+        (poi) => selectPOIForSegment(poi)
+      );
+    }
+
+    showToast(`📍 지점 명칭이 '${newName}'(으)로 수정되었습니다.`);
+  });
+
   function selectPOIForSegment(poi) {
     window.smartTracker.selectPOI(poi);
     segmentStatsPanel.classList.remove('hidden');
@@ -475,7 +534,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   window.selectPOIFromMap = (poiId) => {
-    const poi = window.smartTracker.pois.find(p => p.id === poiId);
+    const poi = window.smartTracker.pois.find(p => p.id === poiId) || 
+                (window.mapManager.poiLayerGroup ? Array.from(window.mapManager.poiLayerGroup.getLayers()).map(l => l.poiData).find(p => p && p.id === poiId) : null);
     if (poi) selectPOIForSegment(poi);
   };
 
@@ -484,7 +544,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     segmentStatsPanel.classList.add('hidden');
   });
 
-  // --- 7. Photo Capture & Caption Feature ---
+  // --- 7. Photo Capture & Caption Feature (Add & Edit) ---
   btnActionPhoto.addEventListener('click', () => {
     if (!currentProject) {
       showToast('⚠️ 먼저 프로젝트를 시작하거나 선택해주세요.');
@@ -499,7 +559,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      // Compress image to ensure smooth mobile upload & storage
       compressImage(event.target.result, 1280, 0.82, (compressedBase64) => {
         tempPhotoBase64 = compressedBase64;
         previewCapturedPhoto.src = compressedBase64;
@@ -515,7 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     };
     reader.readAsDataURL(file);
-    photoInput.value = ''; // Reset
+    photoInput.value = '';
   });
 
   function compressImage(base64Str, maxWidth, quality, callback) {
@@ -573,19 +632,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     showToast('📸 사진과 캡션이 등록되었습니다.');
   });
 
-  // Photo Detail Lightbox
+  // Photo Detail Lightbox with Edit Caption Support (Feature 2)
+  let activePhotoForEdit = null;
+
   function openPhotoDetail(photo) {
+    activePhotoForEdit = photo;
+    detailPhotoId.value = photo.id;
     detailPhotoImg.src = photo.photoBase64 || photo.photo_base64;
-    detailPhotoCaption.textContent = photo.caption || '메모가 없습니다.';
+    detailPhotoCaptionInput.value = photo.caption || '';
     detailPhotoTime.textContent = new Date(photo.createdAt || photo.created_at).toLocaleString();
-    detailPhotoSteps.textContent = `${(photo.stepCount || photo.step_count || 0).toLocaleString()} 보`;
-    detailPhotoDistance.textContent = `${((photo.distanceAtPhoto || photo.distance_at_photo || 0)).toLocaleString()} m`;
+    detailPhotoSteps.textContent = `${Number(photo.stepCount || photo.step_count || 0).toLocaleString()} 보`;
+    detailPhotoDistance.textContent = `${Number(photo.distanceAtPhoto || photo.distance_at_photo || 0).toLocaleString()} m`;
     detailPhotoCoords.textContent = `${photo.latitude.toFixed(5)}, ${photo.longitude.toFixed(5)}`;
     modalPhotoDetail.classList.add('active');
   }
 
+  btnSavePhotoCaption.addEventListener('click', async () => {
+    if (!activePhotoForEdit) return;
+    const newCaption = detailPhotoCaptionInput.value.trim();
+    const photoId = activePhotoForEdit.id;
+
+    // Update in local object
+    activePhotoForEdit.caption = newCaption;
+
+    // Save to Neon DB
+    await window.neonDB.updatePhotoCaption(photoId, newCaption);
+    showToast('💾 사진 캡션이 수정 저장되었습니다.');
+
+    // Refresh map markers
+    if (currentProject) {
+      const fullData = await window.neonDB.getProjectDetails(currentProject.id);
+      window.mapManager.restoreProjectTrail(
+        fullData,
+        (photo) => openPhotoDetail(photo),
+        (poi) => selectPOIForSegment(poi)
+      );
+    }
+  });
+
   btnClosePhotoDetail.addEventListener('click', () => {
     modalPhotoDetail.classList.remove('active');
+    activePhotoForEdit = null;
   });
 
   // --- 8. Pause / Resume ---
@@ -608,7 +695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.lucide) window.lucide.createIcons();
   });
 
-  // --- 9. Finish & Export Standalone HTML ---
+  // --- 9. Finish & Export Standalone HTML (with Address, Weather & Stats) ---
   btnActionFinish.addEventListener('click', () => {
     if (!currentProject) {
       showToast('⚠️ 활성화된 프로젝트가 없습니다.');
@@ -618,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stats = window.smartTracker.getCurrentStats();
     finishSummaryTitle.textContent = currentProject.name;
     finishSummaryDist.textContent = `${stats.totalDistanceKm} km (${stats.totalDistance.toLocaleString()} m)`;
-    finishSummarySteps.textContent = `${stats.totalSteps.toLocaleString()} 보 (보폭 ${stats.avgStrideFormatted} cm)`;
+    finishSummarySteps.textContent = `${stats.totalSteps.toLocaleString()} 보 (평균속도 ${stats.avgSpeed} km/h)`;
     finishSummaryDuration.textContent = stats.durationFormatted;
 
     modalFinishConfirm.classList.add('active');
@@ -630,7 +717,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   btnConfirmFinishExport.addEventListener('click', async () => {
     modalFinishConfirm.classList.remove('active');
-    showToast('📦 데이터 집계 및 HTML 리포트 생성 중...');
+    showToast('📦 데이터 집계, 지역 주소 및 날씨 조회 중...');
 
     const finalStats = window.smartTracker.stopTracking();
     if (syncInterval) clearInterval(syncInterval);
@@ -641,9 +728,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fetch full fresh project bundle for export
     const fullProjectData = await window.neonDB.getProjectDetails(currentProject.id);
 
-    // Trigger Single-File HTML Download
-    window.projectExporter.downloadHTML(fullProjectData);
-    showToast('🎉 트래킹 완료! HTML 파일이 다운로드되었습니다.');
+    // Trigger Single-File HTML Download with automatic Geocoding & Weather
+    await window.projectExporter.downloadHTML(fullProjectData);
+    showToast('🎉 트래킹 완료! 주소와 날씨가 포함된 HTML 파일이 다운로드되었습니다.');
 
     updateUIControls();
   });

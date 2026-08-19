@@ -367,6 +367,7 @@ body {
   border-radius: 9999px;
   border: 2px solid #ffffff;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
 }
 
 .end-badge {
@@ -378,15 +379,76 @@ body {
   border-radius: 9999px;
   border: 2px solid #ffffff;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
 }
 
-.photo-map-marker {
+/* POI Marker Container & Permanent Label */
+.poi-map-marker-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
+.poi-marker-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.poi-pin-icon {
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.5);
+  transition: transform 0.15s ease;
+}
+
+.poi-marker-wrap:hover .poi-pin-icon {
+  transform: scale(1.15);
+}
+
+.poi-title-bubble {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1.5px solid #f59e0b;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  margin-top: 3px;
+  max-width: 130px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* Photo Marker Container & Permanent Caption */
+.photo-map-marker-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.photo-marker-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .photo-pin-bubble {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 3px solid #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -396,7 +458,7 @@ body {
   transition: transform 0.2s;
 }
 
-.photo-pin-bubble:hover {
+.photo-marker-wrap:hover .photo-pin-bubble {
   transform: scale(1.15);
 }
 
@@ -408,42 +470,30 @@ body {
 
 .photo-camera-icon {
   position: absolute;
-  bottom: 0px;
-  right: 0px;
-  font-size: 10px;
+  bottom: -2px;
+  right: -2px;
+  font-size: 9px;
   background: #ffffff;
   border-radius: 50%;
   padding: 1px 2px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
-.poi-map-marker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-}
-
-.poi-pin {
-  background: #f59e0b;
+.photo-caption-bubble {
+  background: rgba(15, 23, 42, 0.88);
   color: #ffffff;
-  padding: 5px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
-}
-
-.poi-label {
-  background: rgba(255, 255, 255, 0.95);
   font-size: 10px;
   font-weight: 700;
-  color: #1e293b;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
   margin-top: 2px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  max-width: 130px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 
 /* Toast Notifications */

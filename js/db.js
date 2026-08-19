@@ -225,8 +225,16 @@ class NeonDB {
     return await this.request('insert_poi', { projectId, ...poiData });
   }
 
+  async updatePOI(poiId, name) {
+    return await this.request('update_poi', { poiId, name });
+  }
+
   async insertPhoto(projectId, photoData) {
     return await this.request('insert_photo', { projectId, ...photoData });
+  }
+
+  async updatePhotoCaption(photoId, caption) {
+    return await this.request('update_photo_caption', { photoId, caption });
   }
 
   // --- Offline Queue Handling ---

@@ -62,12 +62,12 @@
           </div>
         </div>
 
-        <!-- Primary 3-Metric Grid: Distance, Steps, Avg Stride -->
-        <div class="hud-metrics-grid">
+        <!-- Primary 4-Metric Grid: Distance, Steps, Avg Stride, Avg Speed -->
+        <div class="hud-metrics-grid" style="grid-template-columns: repeat(4, 1fr);">
           <!-- Distance -->
           <div class="hud-metric-item">
-            <span class="hud-metric-label">총 이동거리</span>
-            <div class="hud-metric-value text-blue-600">
+            <span class="hud-metric-label">총 거리</span>
+            <div class="hud-metric-value text-blue-600 text-lg">
               <span id="hud-distance">0.00</span>
               <span class="hud-metric-unit">km</span>
             </div>
@@ -76,23 +76,32 @@
           <!-- Step Count -->
           <div class="hud-metric-item border-x border-slate-100">
             <span class="hud-metric-label">걸음 수</span>
-            <div class="hud-metric-value text-emerald-600">
+            <div class="hud-metric-value text-emerald-600 text-lg">
               <span id="hud-steps">0</span>
               <span class="hud-metric-unit">보</span>
             </div>
           </div>
 
-          <!-- Avg Stride (cm) = (Distance / Steps) * 100 -->
-          <div class="hud-metric-item">
+          <!-- Avg Stride -->
+          <div class="hud-metric-item border-r border-slate-100">
             <span class="hud-metric-label">평균 보폭</span>
-            <div class="hud-metric-value text-amber-600">
+            <div class="hud-metric-value text-amber-600 text-lg">
               <span id="hud-stride">0.0</span>
               <span class="hud-metric-unit">cm</span>
             </div>
           </div>
+
+          <!-- Avg Speed (Feature 5) -->
+          <div class="hud-metric-item">
+            <span class="hud-metric-label">평균 속도</span>
+            <div class="hud-metric-value text-indigo-600 text-lg">
+              <span id="hud-avg-speed">0.0</span>
+              <span class="hud-metric-unit">km/h</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Secondary Info Row: Elapsed Time, Speed, Altitude, WakeLock -->
+        <!-- Secondary Info Row: Elapsed Time, Current Speed, Altitude, WakeLock -->
         <div class="hud-sub-row">
           <div class="flex items-center gap-1">
             <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i>
@@ -101,7 +110,7 @@
 
           <div class="flex items-center gap-1">
             <i data-lucide="gauge" class="w-3.5 h-3.5 text-slate-400"></i>
-            <span>속도: <b id="hud-speed" class="text-slate-700">0.0</b> km/h</span>
+            <span>순간: <b id="hud-speed" class="text-slate-700">0.0</b> km/h</span>
           </div>
 
           <div class="flex items-center gap-1">
@@ -310,7 +319,7 @@
     </div>
   </div>
 
-  <!-- MODAL 4: POI Name Input Modal -->
+  <!-- MODAL 4: POI Name Input Modal (New POI) -->
   <div id="modal-poi-input" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
@@ -325,7 +334,7 @@
                  class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white" />
         </div>
         <p class="text-xs text-slate-500">
-          현재 위치에 마커를 생성하며, 이후 이 지점부터의 구간 거리와 보폭 통계를 모니터링할 수 있습니다.
+          현재 위치에 마커를 생성하며, 등록된 명칭은 지도 위에 항상 표시됩니다.
         </p>
       </div>
 
@@ -340,22 +349,59 @@
     </div>
   </div>
 
-  <!-- MODAL 5: Photo Lightbox Detail View Modal -->
-  <div id="modal-photo-detail" class="modal-overlay">
-    <div class="modal-card max-w-xl">
+  <!-- MODAL 4-2: Edit Existing POI Name Modal (Feature 1) -->
+  <div id="modal-edit-poi" class="modal-overlay">
+    <div class="modal-card">
       <div class="modal-header">
-        <h3 class="font-extrabold text-base text-slate-900">촬영 기록 상세</h3>
-        <button id="btn-close-photo-detail" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
-      </div>
-
-      <div class="p-3 bg-slate-950 flex items-center justify-center max-h-[50vh]">
-        <img id="detail-photo-img" src="" class="max-h-[48vh] max-w-full object-contain rounded-lg" alt="photo" />
+        <h3 class="font-extrabold text-base text-slate-900">지점(POI) 명칭 수정</h3>
+        <button id="btn-close-edit-poi" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
       </div>
 
       <div class="modal-body space-y-3">
-        <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-          <div class="text-xs font-bold text-blue-600 mb-1">메모 / 캡션</div>
-          <p id="detail-photo-caption" class="text-sm font-semibold text-slate-800"></p>
+        <input type="hidden" id="edit-poi-id" />
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">새 지점 명칭</label>
+          <input type="text" id="edit-poi-name-input" placeholder="수정할 지점 명칭"
+                 class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-bold" />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-cancel-edit-poi" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+          취소
+        </button>
+        <button id="btn-save-edit-poi" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow transition">
+          수정 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: Photo Lightbox Detail & Caption Edit View Modal (Feature 2) -->
+  <div id="modal-photo-detail" class="modal-overlay">
+    <div class="modal-card max-w-xl">
+      <div class="modal-header">
+        <h3 class="font-extrabold text-base text-slate-900">촬영 기록 상세 및 캡션 수정</h3>
+        <button id="btn-close-photo-detail" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+      </div>
+
+      <div class="p-3 bg-slate-950 flex items-center justify-center max-h-[48vh]">
+        <img id="detail-photo-img" src="" class="max-h-[46vh] max-w-full object-contain rounded-lg" alt="photo" />
+      </div>
+
+      <div class="modal-body space-y-3">
+        <input type="hidden" id="detail-photo-id" />
+        
+        <!-- Editable Caption -->
+        <div class="bg-blue-50/60 p-3 rounded-xl border border-blue-100">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold text-blue-700">현장 메모 / 캡션 (수정 가능)</span>
+            <button id="btn-save-photo-caption" class="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg shadow-sm transition">
+              캡션 저장
+            </button>
+          </div>
+          <textarea id="detail-photo-caption-input" rows="2" 
+                    class="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-lg text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
         </div>
 
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -426,12 +472,12 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
-  <!-- Application Logic Scripts (Forced Fresh Version) -->
-  <script src="./js/db.js?v=3.0.0"></script>
-  <script src="./js/tracker.js?v=3.0.0"></script>
-  <script src="./js/map.js?v=3.0.0"></script>
-  <script src="./js/exporter.js?v=3.0.0"></script>
-  <script src="./js/app.js?v=3.0.0"></script>
+  <!-- Application Logic Scripts (Forced Fresh Version v3.1.0) -->
+  <script src="./js/db.js?v=3.1.0"></script>
+  <script src="./js/tracker.js?v=3.1.0"></script>
+  <script src="./js/map.js?v=3.1.0"></script>
+  <script src="./js/exporter.js?v=3.1.0"></script>
+  <script src="./js/app.js?v=3.1.0"></script>
 
   <!-- Service Worker Cache Purge & Refresh Routine -->
   <script>
