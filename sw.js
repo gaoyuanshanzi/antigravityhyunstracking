@@ -1,6 +1,6 @@
-const CACHE_NAME = 'smart-tracker-v2';
+// Service Worker v3 - No Aggressive Caching for JS/API
+const CACHE_NAME = 'smart-tracker-v3';
 
-// Clean up old caches immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -8,38 +8,20 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => caches.delete(key))
-      );
+      return Promise.all(keys.map((key) => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
 });
 
-// Network-First Strategy: Always fetch latest from network, fallback to cache only if offline
 self.addEventListener('fetch', (event) => {
-  // Never intercept API routes
-  if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
+  // Never intercept API calls
+  if (event.request.url.includes('/api/')) {
     return;
   }
-
+  // Let browser handle normal network requests
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('./index.html');
-          }
-        });
-      })
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
   );
 });

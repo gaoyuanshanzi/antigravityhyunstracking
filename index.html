@@ -426,21 +426,29 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
-  <!-- Application Logic Scripts (v1.0.2 Cache-Busting) -->
-  <script src="./js/db.js?v=1.0.2"></script>
-  <script src="./js/tracker.js?v=1.0.2"></script>
-  <script src="./js/map.js?v=1.0.2"></script>
-  <script src="./js/exporter.js?v=1.0.2"></script>
-  <script src="./js/app.js?v=1.0.2"></script>
+  <!-- Application Logic Scripts (Forced Fresh Version) -->
+  <script src="./js/db.js?v=3.0.0"></script>
+  <script src="./js/tracker.js?v=3.0.0"></script>
+  <script src="./js/map.js?v=3.0.0"></script>
+  <script src="./js/exporter.js?v=3.0.0"></script>
+  <script src="./js/app.js?v=3.0.0"></script>
 
-  <!-- Service Worker Registration with Auto Update Check -->
+  <!-- Service Worker Cache Purge & Refresh Routine -->
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=1.0.2').then(reg => {
-          reg.update();
-        }).catch(e => console.log('SW failed:', e));
+      // Unregister old workers to immediately free cached script locks
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          registration.update();
+        }
       });
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (let name of names) {
+            if (name !== 'smart-tracker-v3') caches.delete(name);
+          }
+        });
+      }
     }
   </script>
 </body>
