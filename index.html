@@ -426,18 +426,20 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
-  <!-- Application Logic Scripts -->
-  <script src="./js/db.js"></script>
-  <script src="./js/tracker.js"></script>
-  <script src="./js/map.js"></script>
-  <script src="./js/exporter.js"></script>
-  <script src="./js/app.js"></script>
+  <!-- Application Logic Scripts (v1.0.2 Cache-Busting) -->
+  <script src="./js/db.js?v=1.0.2"></script>
+  <script src="./js/tracker.js?v=1.0.2"></script>
+  <script src="./js/map.js?v=1.0.2"></script>
+  <script src="./js/exporter.js?v=1.0.2"></script>
+  <script src="./js/app.js?v=1.0.2"></script>
 
-  <!-- Service Worker Registration -->
+  <!-- Service Worker Registration with Auto Update Check -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW failed:', e));
+        navigator.serviceWorker.register('./sw.js?v=1.0.2').then(reg => {
+          reg.update();
+        }).catch(e => console.log('SW failed:', e));
       });
     }
   </script>

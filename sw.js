@@ -1,27 +1,7 @@
-const CACHE_NAME = 'smart-tracker-v1';
-const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './css/style.css',
-  './js/app.js',
-  './js/db.js',
-  './js/map.js',
-  './js/tracker.js',
-  './js/exporter.js',
-  './manifest.json',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js'
-];
+const CACHE_NAME = 'smart-tracker-v2';
 
+// Clean up old caches immediately
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('Some assets could not be pre-cached:', err);
-      });
-    })
-  );
   self.skipWaiting();
 });
 
@@ -29,36 +9,37 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => caches.delete(key))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Network-First Strategy: Always fetch latest from network, fallback to cache only if offline
 self.addEventListener('fetch', (event) => {
-  // Pass-through for Neon DB API calls (do not cache database POST/Fetch requests)
-  if (event.request.url.includes('neon.tech') || event.request.method !== 'GET') {
+  // Never intercept API routes
+  if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          if (event.request.headers.get('accept')?.includes('text/html')) {
+            return caches.match('./index.html');
+          }
         });
-        return response;
-      }).catch(() => {
-        return caches.match('./index.html');
-      });
-    })
+      })
   );
 });
