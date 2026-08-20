@@ -138,10 +138,11 @@ class MapManager {
     if (!this.map) return;
 
     const safeName = this.escapeHtml(poi.name || '지점');
+    const poiId = `poi-marker-${poi.id || Date.now()}`;
     const poiIcon = L.divIcon({
       className: 'poi-map-marker-container',
       html: `
-        <div class="poi-marker-wrap">
+        <div class="poi-marker-wrap" id="${poiId}">
           <div class="poi-pin-icon">📍</div>
           <div class="poi-title-bubble">${safeName}</div>
         </div>
@@ -152,10 +153,6 @@ class MapManager {
 
     const marker = L.marker([poi.latitude, poi.longitude], { icon: poiIcon, zIndexOffset: 400 });
     marker.poiData = poi;
-    
-    marker.on('click', (e) => {
-      if (onClick) onClick(poi);
-    });
 
     const timeStr = poi.created_at || poi.createdAt ? new Date(poi.created_at || poi.createdAt).toLocaleTimeString() : '';
     marker.bindPopup(`
@@ -174,6 +171,24 @@ class MapManager {
     `);
 
     this.poiLayerGroup.addLayer(marker);
+
+    // Bind click only to the visible pin and title elements — NOT the full transparent container
+    // Use a short delay so the DOM element is mounted before we query it
+    setTimeout(() => {
+      const el = document.getElementById(poiId);
+      if (el) {
+        const pin = el.querySelector('.poi-pin-icon');
+        const title = el.querySelector('.poi-title-bubble');
+        const open = (e) => {
+          e.stopPropagation();
+          marker.openPopup();
+          if (onClick) onClick(poi);
+        };
+        if (pin) pin.addEventListener('click', open);
+        if (title) title.addEventListener('click', open);
+      }
+    }, 80);
+
     return marker;
   }
 
@@ -182,10 +197,11 @@ class MapManager {
     if (!this.map) return;
 
     const safeCaption = photo.caption ? this.escapeHtml(photo.caption) : '사진';
+    const photoId = `photo-marker-${photo.id || Date.now()}`;
     const photoIcon = L.divIcon({
       className: 'photo-map-marker-container',
       html: `
-        <div class="photo-marker-wrap">
+        <div class="photo-marker-wrap" id="${photoId}">
           <div class="photo-pin-bubble">
             <img src="${photo.photoBase64 || photo.photo_base64}" class="photo-pin-thumb" alt="thumb" />
             <span class="photo-camera-icon">📷</span>
@@ -199,12 +215,24 @@ class MapManager {
 
     const marker = L.marker([photo.latitude, photo.longitude], { icon: photoIcon, zIndexOffset: 500 });
     marker.photoData = photo;
-    
-    marker.on('click', () => {
-      if (onClick) onClick(photo);
-    });
 
     this.photoLayerGroup.addLayer(marker);
+
+    // Bind click only to the visible thumbnail and caption elements — NOT the full transparent container
+    setTimeout(() => {
+      const el = document.getElementById(photoId);
+      if (el) {
+        const bubble = el.querySelector('.photo-pin-bubble');
+        const caption = el.querySelector('.photo-caption-bubble');
+        const open = (e) => {
+          e.stopPropagation();
+          if (onClick) onClick(photo);
+        };
+        if (bubble) bubble.addEventListener('click', open);
+        if (caption) caption.addEventListener('click', open);
+      }
+    }, 80);
+
     return marker;
   }
 

@@ -387,13 +387,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  pointer-events: none !important; /* Pass clicks through empty transparent space */
 }
 
 .poi-marker-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
+  pointer-events: none;
 }
 
 .poi-pin-icon {
@@ -409,6 +410,8 @@ body {
   border: 2px solid #ffffff;
   box-shadow: 0 3px 10px rgba(245, 158, 11, 0.5);
   transition: transform 0.15s ease;
+  pointer-events: auto !important; /* Only visible icon responds to clicks */
+  cursor: pointer;
 }
 
 .poi-marker-wrap:hover .poi-pin-icon {
@@ -430,6 +433,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  pointer-events: auto !important; /* Visible title responds to clicks */
+  cursor: pointer;
 }
 
 /* Photo Marker Container & Permanent Caption */
@@ -437,13 +442,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  pointer-events: none !important; /* Pass clicks through empty transparent space */
 }
 
 .photo-marker-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
+  pointer-events: none;
 }
 
 .photo-pin-bubble {
@@ -456,6 +462,8 @@ body {
   background: #2563eb;
   position: relative;
   transition: transform 0.2s;
+  pointer-events: auto !important; /* Only thumbnail responds to clicks */
+  cursor: pointer;
 }
 
 .photo-marker-wrap:hover .photo-pin-bubble {
@@ -494,6 +502,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  pointer-events: auto !important; /* Visible caption responds to clicks */
+  cursor: pointer;
 }
 
 /* Toast Notifications */
